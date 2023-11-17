@@ -10,8 +10,16 @@ import pygame
 import tkinter as tk
 import sys
 import socket
+import pickle           # A simple serializing library. Used for sending data between server/client simply
 
 from assets.code.helperCode import *
+
+# A class to hold data transferred to server and back
+class Transfer_Data:
+    paddle_pos: tuple[int, int]     # Holds paddle position in x and y coords.
+    sync: int                       # Sync variable. Used to ensure players remain in sync.
+    id: int                         # Player ID (same as thread id, starts at 0 and counts up)
+    points: tuple[int, int] = 0, 0  # Game points, stored in a tuple
 
 # This is the main game loop.  For the most part, you will not need to modify this.  The sections
 # where you should add to the code are marked.  Feel free to change any part of this project
@@ -60,6 +68,10 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
 
     sync = 0
 
+    # Receiving initial data from the server
+    data = pickle.loads(client.recv(PACKET_SIZE))
+
+
     while True:
         # Wiping the screen
         screen.fill((0,0,0))
@@ -101,7 +113,7 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
             winText = "Player 1 Wins! " if lScore > 4 else "Player 2 Wins! "
             textSurface = winFont.render(winText, False, WHITE, (0,0,0))
             textRect = textSurface.get_rect()
-            textRect.center = ((screenWidth/2), screenHeight/2)
+            textRect.center = (int(screenWidth/2), int(screenHeight/2)) # My linter was whining about screenWidth/2 being a float instead of an int
             winMessage = screen.blit(textSurface, textRect)
         else:
 
@@ -176,9 +188,9 @@ def joinServer(ip:str, port:str, errorLabel:tk.Label, app:tk.Tk) -> None:
     # Create a socket and connect to the server
     # You don't have to use SOCK_STREAM, use what you think is best
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((ip, port))
 
     # Get the required information from your server (screen width, height & player paddle, "left or "right)
-
 
     # If you have messages you'd like to show the user use the errorLabel widget like so
     errorLabel.config(text=f"Some update text. You input: IP: {ip}, Port: {port}")
