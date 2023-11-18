@@ -1,4 +1,5 @@
 *.pdf
 README.txt
-.venv
-__pychache__
+.venv/
+__pychache__/
+doc/

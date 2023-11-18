@@ -1,9 +1,9 @@
 # =================================================================================================
-# Contributing Authors:	    <Anyone who touched the code>
-# Email Addresses:          <Your uky.edu email addresses>
-# Date:                     <The date the file was last edited>
-# Purpose:                  <How this file contributes to the project>
-# Misc:                     <Not Required.  Anything else you might want to include>
+# Contributing Authors:	    Jacob Hanks
+# Email Addresses:          jacob.hanks@uky.edu
+# Date:                     Nov 17 2023
+# Purpose:                  Server implementation
+# Misc:
 # =================================================================================================
 
 import logging      # A simple logging library. Allows us to log what has occured to stdout
@@ -12,8 +12,12 @@ import socket       # A simple networking library. Allows us to communicate with
 import threading    # A simple threading library. One thread is used for each client
 from assets.code.helperCode import *
 
-# Class that contains data for an individual player
 class Player:
+    # Author:        Jacob Hanks
+    # Purpose:       Contains all data that needs to be transferred back and forth between clients
+    # Pre:           When someone joins the game, a new Player is created and they are added to that game
+    # Post:          When a player disconnects, they are removed from the game
+# ============================================================================
     paddle: Paddle      # Holds data about paddles position, velocity, etc.
     id: int             # Player ID, either 0 or 1 depending on side (0 for left, 1 for right)
     points: int         # Players score
@@ -22,8 +26,12 @@ class Player:
     def __init__(self, id) -> None:
         self.id = id
 
-# Game class, contains data for one game. Since we can have an arbitrary number of games, we create a new instance of a Game for each game
 class Game:
+    # Author:        Jacob Hanks
+    # Purpose:       Contains all the data to run a game between 2 players
+    # Pre:           When a game is started, a Game is created
+    # Post:          When a game is ended, the Game is removed from the global game list
+# ============================================================================
     id: int                     # Games ID, starts at 0 and counts up
     players: list[Player] = []  # A list of players in a game. Should be less than 2
 
@@ -36,20 +44,16 @@ IP: str = "127.0.0.1"       # IP to connect over
 PORT: int = 4567            # Port to bind
 WIDTH, HEIGHT = 700, 700    # Window width and height (default pong values)
 
-PACKET_SIZE = 4097  # Packet size for communications between client and conn
+PACKET_SIZE = 4096          # Packet size for communications between client and conn
 GAMES: list[Game] = []      # A list of all games active
 
-# Use this file to write your conn logic
-# You will need to support at least two clients
-# You will need to keep track of where on the screen (x,y coordinates) each paddle is, the score
-# for each player and where the ball is, and relay that to each client
-# I suggest you use the sync variable in pongClient.py to determine how out of sync your two
-# clients are and take actions to resync the games
-
-
-# Finds a game with the input ID
 def find_game(game_id: int) -> Game:
+    # Author:        Jacob Hanks
+    # Purpose:       Finds a game from the global game list given an input game id
+    # Pre:           Expects that there are valid games in the global games list, and that the game id pass in is among them
+    # Post:          Returns the Game from GAMES with ID the same as the passed in game_id
     # Iterate through list of games and find the game with game id matching game_id
+# ============================================================================
     for game in GAMES:
         if game_id == game.id:
             return game
@@ -58,8 +62,12 @@ def find_game(game_id: int) -> Game:
         logging.error("Game with ID %d not found.", game_id)
         return Game(-1)
 
-# Locates an available game for the client to join and joins it
-def join_game(): # -> player_id: int, game_id: int
+def join_game() -> tuple[int, int]:
+    # Author:        Jacob Hanks
+    # Purpose:       Finds an available game to join when a player connects. If no open games exist, it creates one.
+    # Pre:           Called when a player connects.
+    # Post:          Returns a tuple of the player ID and the game ID that were found for the player to join
+# ============================================================================
     if len(GAMES) == 0: # If no GAMES exist, make game 0
         # Initialize game
         game_id: int = 0
@@ -99,9 +107,21 @@ def join_game(): # -> player_id: int, game_id: int
             return player_id, game.id
 
 def remove_player(game_id: int, player_id: int) -> None:
-    pass
+    # Author:        Jacob Hanks
+    # Purpose:       Removes a player from the game once they have disconnected
+    # Pre:           A player has disconnected
+    # Post:          That player is removed from the game
+# ============================================================================
+    game = find_game(game_id)
+    player_index = find_player(game.players, player_id)
+    game.players.remove(game.players[player_index])
 
 def find_player(players: list[Player], player_id: int) -> int:
+    # Author:        Jacob Hanks
+    # Purpose:       Finds a player in a game with a given player ID
+    # Pre:           Assumes the list of players passed in and the player ID are valid
+    # Post:          Returns the index of the player in the players list of the game
+# ============================================================================
     for index, player in enumerate(players):
         if player_id == player.id:
             return index # Index of player found
@@ -110,8 +130,15 @@ def find_player(players: list[Player], player_id: int) -> int:
         logging.error("Player with id %d not found.", player_id)
         return -1
 
-# Main logic of the conn. takes data from the clients and communicates game states to them
 def client_thread_start(conn: socket.socket, game_id: int, player_id: int) -> None:
+    # Author:        Jacob Hanks
+    # Purpose:       Thread entry point. Runs the find_game method to find a game for the client to join,
+    #                   waits on a 2nd client to join the game, then sends Initializing data to each client.
+    #                   then, it transfers data back and forth between clients such that they know where to position
+    #                   elements, score, etc.
+    # Pre:           Takes a socket, game ID, and player ID as input. It expects the socket to have a valid connection
+    # Post:             After this method is finished, the client will disconnect and the player associated with it will be removed from the list.
+# ============================================================================
     # Find the game associated with the passed in ID
     game: Game = find_game(game_id)
 
@@ -136,11 +163,11 @@ def client_thread_start(conn: socket.socket, game_id: int, player_id: int) -> No
     # Main logic loop
     while True:
         try: # Get data from client
-            received_data = pickle.loads(conn.recv(PACKET_SIZE))
+            received_data: Player = pickle.loads(conn.recv(PACKET_SIZE))
         except Exception as e: # Some exception occured when receiving data
             logging.error("Did not receive data from client: %s", e)
             break
-        if not received_data:
+        if not received_data: # If data was not received
             logging.warn("Lost connection to client %d in game %d", player_id, game_id )
             break
 
@@ -171,6 +198,14 @@ def client_thread_start(conn: socket.socket, game_id: int, player_id: int) -> No
 
 
 if __name__ == "__main__":
+    # Author:        Jacob Hanks
+    # Purpose:       Main function. Entry point for the server
+    # Pre:           n/a
+    # Post:          This function binds to a socket with host IP and port PORT, then it listens on that IP and port
+    #                   for a client to attempt to connect. When a client connects, it spawns a new thread for it.
+    #                   The new thread has target client_thread_start, which starts the game and data transfer process.
+    #                   After it spawns the thread, the main thread should be open for another connection.
+# ============================================================================
     # Set up logging to stdout
     logging.basicConfig(format="%(asctime)s: %(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 
@@ -189,10 +224,12 @@ if __name__ == "__main__":
     logging.info("Waiting for connections...")
 
 
+    # Initial number of threads, increments for every player that joins
     thread_number = 0
+
+    # Listen for clients
+    server.listen(6)
     while True:
-        # Listen for clients
-        server.listen(1)
 
         # Accept incoming connections, and thread them
         conn, address = server.accept()

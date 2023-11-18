@@ -17,8 +17,12 @@ from assets.code.helperCode import *
 
 PACKET_SIZE = 4096
 
-# Class that contains data for an individual player
 class Player:
+    # Author:        Jacob Hanks
+    # Purpose:       Contains all data that needs to be transferred back and forth between clients
+    # Pre:           When someone joins the game, a new Player is created and they are added to that game
+    # Post:          When a player disconnects, they are removed from the game
+# ============================================================================
     paddle: Paddle      # Holds data about paddles position, velocity, etc.
     id: int             # Player ID, either 0 or 1 depending on side (0 for left, 1 for right)
     points: int         # Players score
@@ -84,7 +88,6 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
     opponent_data: Player
 
     while True:
-
         # If we are told by the server to pause, do not process anything
         if player_data.pause == True:
             continue
@@ -125,10 +128,12 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
         player_data.sync = sync
 
         # Send the server the update
-        client.send(pickle.dumps(player_data))
+        client.sendall(pickle.dumps(player_data))
+        print("Sent player data to the server")
 
         # Receive opponent data from the server
         opponent_data = pickle.loads(client.recv(PACKET_SIZE))
+        print("Received opponent data from the server")
 
         # Sync paddle with opponent
         opponentPaddleObj = opponent_data.paddle
@@ -228,6 +233,7 @@ def joinServer(ip:str, port:str, errorLabel:tk.Label, app:tk.Tk) -> None:
     # port          A string holding the port the server is using
     # errorLabel    A tk label widget, modify it's text to display messages to the user (example below)
     # app           The tk window object, needed to kill the window
+# ============================================================================
 
     # Create a socket and connect to the server
     # You don't have to use SOCK_STREAM, use what you think is best
@@ -257,7 +263,6 @@ def joinServer(ip:str, port:str, errorLabel:tk.Label, app:tk.Tk) -> None:
     app.withdraw()     # Hides the window (we'll kill it later)
     playGame(screenWidth, screenHeight, paddle_side, client)  # User will be either left or right paddle
     app.quit()         # Kills the window
-
 
 # This displays the opening screen, you don't need to edit this (but may if you like)
 def startScreen():
@@ -291,8 +296,3 @@ def startScreen():
 
 if __name__ == "__main__":
     startScreen()
-
-    # Uncomment the line below if you want to play the game without a server to see how it should work
-    # the startScreen() function should call playGame with the arguments given to it by the server this is
-    # here for demo purposes only
-    # playGame(640, 480,"left",socket.socket(socket.AF_INET, socket.SOCK_STREAM))
