@@ -6,6 +6,7 @@
 # Misc:                     <Not Required.  Anything else you might want to include>
 # =================================================================================================
 
+from typing import List
 import pygame
 import tkinter as tk
 import sys
@@ -14,17 +15,23 @@ import pickle           # A simple serializing library. Used for sending data be
 
 from assets.code.helperCode import *
 
-# A class to hold data transferred to server and back
-class Transfer_Data:
-    paddle_pos: tuple[int, int]     # Holds paddle position in x and y coords.
-    sync: int                       # Sync variable. Used to ensure players remain in sync.
-    id: int                         # Player ID (same as thread id, starts at 0 and counts up)
-    points: tuple[int, int] = 0, 0  # Game points, stored in a tuple
+PACKET_SIZE = 4096
+
+# Class that contains data for an individual player
+class Player:
+    paddle: Paddle      # Holds data about paddles position, velocity, etc.
+    id: int             # Player ID, either 0 or 1 depending on side (0 for left, 1 for right)
+    points: int         # Players score
+    sync: int           # Sync variable. Used to ensure players remain in sync.
+    pause: bool = False # Tells the player if it should pause to allow the other player to catch up
+    def __init__(self, id) -> None:
+        self.id = id
 
 # This is the main game loop.  For the most part, you will not need to modify this.  The sections
 # where you should add to the code are marked.  Feel free to change any part of this project
 # to suit your needs.
 def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.socket) -> None:
+    print("Entered playGame")
 
     # Pygame inits
     pygame.mixer.pre_init(44100, -16, 2, 2048)
@@ -68,11 +75,20 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
 
     sync = 0
 
+    print("Finished setting up display")
     # Receiving initial data from the server
-    data = pickle.loads(client.recv(PACKET_SIZE))
+    player_data: Player = pickle.loads(client.recv(PACKET_SIZE))
+    print("Received data from server")
 
+    # Initializing opponent data
+    opponent_data: Player
 
     while True:
+
+        # If we are told by the server to pause, do not process anything
+        if player_data.pause == True:
+            continue
+
         # Wiping the screen
         screen.fill((0,0,0))
 
@@ -96,6 +112,32 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
         # where the ball is and the current score.
         # Feel free to change when the score is updated to suit your needs/requirements
 
+        # Update paddle position
+        player_data.paddle = playerPaddleObj
+
+        # Update score
+        if playerPaddle == "left":
+            player_data.points = lScore
+        else:
+            player_data.points = rScore
+
+        # Update sync variable
+        player_data.sync = sync
+
+        # Send the server the update
+        client.send(pickle.dumps(player_data))
+
+        # Receive opponent data from the server
+        opponent_data = pickle.loads(client.recv(PACKET_SIZE))
+
+        # Sync paddle with opponent
+        opponentPaddleObj = opponent_data.paddle
+
+        # Sync points with opponent
+        if playerPaddle == "left":
+            rScore = opponent_data.points
+        else:
+            lScore = opponent_data.points
 
         # =========================================================================================
 
@@ -168,6 +210,8 @@ def playGame(screenWidth:int, screenHeight:int, playerPaddle:str, client:socket.
         # Send your server update here at the end of the game loop to sync your game with your
         # opponent's game
 
+        # Handled above
+
         # =========================================================================================
 
 
@@ -188,7 +232,7 @@ def joinServer(ip:str, port:str, errorLabel:tk.Label, app:tk.Tk) -> None:
     # Create a socket and connect to the server
     # You don't have to use SOCK_STREAM, use what you think is best
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((ip, port))
+    client.connect((ip, int(port)))
 
     # Get the required information from your server (screen width, height & player paddle, "left or "right)
 
@@ -197,10 +241,22 @@ def joinServer(ip:str, port:str, errorLabel:tk.Label, app:tk.Tk) -> None:
     # You may or may not need to call this, depending on how many times you update the label
     errorLabel.update()
 
+    screenWidth, screenHeight, paddle_side_int = pickle.loads(client.recv(PACKET_SIZE))
+    print("Received screen size and paddle side from server")
+
+    # Determine paddle side
+    if paddle_side_int == 0:
+        paddle_side: str = "left"
+    else:
+        paddle_side: str = "right"
+
+    errorLabel.config(text="Waiting for 2nd player...")
+    errorLabel.update()
+
     # Close this window and start the game with the info passed to you from the server
-    #app.withdraw()     # Hides the window (we'll kill it later)
-    #playGame(screenWidth, screenHeight, ("left"|"right"), client)  # User will be either left or right paddle
-    #app.quit()         # Kills the window
+    app.withdraw()     # Hides the window (we'll kill it later)
+    playGame(screenWidth, screenHeight, paddle_side, client)  # User will be either left or right paddle
+    app.quit()         # Kills the window
 
 
 # This displays the opening screen, you don't need to edit this (but may if you like)
@@ -234,9 +290,9 @@ def startScreen():
     app.mainloop()
 
 if __name__ == "__main__":
-    #startScreen()
+    startScreen()
 
     # Uncomment the line below if you want to play the game without a server to see how it should work
     # the startScreen() function should call playGame with the arguments given to it by the server this is
     # here for demo purposes only
-    playGame(640, 480,"left",socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+    # playGame(640, 480,"left",socket.socket(socket.AF_INET, socket.SOCK_STREAM))

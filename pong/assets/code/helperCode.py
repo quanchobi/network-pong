@@ -6,7 +6,7 @@ def updateScore(lScore:int, rScore:int, screen:pygame.surface.Surface, color, sc
     textSurface = scoreFont.render(f"{lScore}   {rScore}", False, color)
     textRect = textSurface.get_rect()
     screenWidth = screen.get_width()
-    textRect.center = ((screenWidth/2)+5, 50)
+    textRect.center = (int((screenWidth/2)+5), 50)
     return screen.blit(textSurface, textRect)
 
 class Paddle:
@@ -22,18 +22,18 @@ class Ball:
         self.yVel = startYvel
         self.startXpos = rect.x
         self.startYpos = rect.y
-    
+
     def updatePos(self) -> None:
         self.rect.x += self.xVel
         self.rect.y += self.yVel
-    
+
     def hitPaddle(self, paddleCenter:int) -> None:
         self.xVel *= -1
         self.yVel = (self.rect.center[1] - paddleCenter)//2
-    
+
     def hitWall(self) -> None:
         self.yVel *= -1
-    
+
     def reset(self, nowGoing:str) -> None:
         # nowGoing  The direction the ball should be going after the reset
         self.rect.x = self.startXpos
